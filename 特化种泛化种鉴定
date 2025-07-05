@@ -1,1 +1,53 @@
+getwd()
+#拆分Generalists and Specialists ##
+library(EcolUtils)
+library(spaa)
+library(vegan)
+library(permute)
+library(lattice)
+library(dplyr)
+#细菌
+asv_r16s<- read.csv("21_fertilization_16s+its/R16s_asv.csv",row.names=1)
+asv_r16s <-t (asv_r16s)
+df<- spec.gen(asv_r16s,niche.width.method="occurrence",perm.method="quasiswap",n=1000,probs=c(0.025,0.975))
+No_generalist <- length(grep('GENERALIST',df$sign))
+No_neutral <- length(grep('NON',df$sign))
+No_specialist <- length(grep('SPECIALIST',df$sign))
+write.csv(df,"input/asv_16s_TehuaFanhua.csv")
+
+asv1<-read.csv("input/asv_16s_TehuaFanhua.csv",row.names = 1)
+#asv <- filter(.data=asv1,sign!="NON SIGNIFICANT")#返回sign不是"NON SIGNIFICANT"的数据
+asv2 <- filter(.data=asv1,sign=="GENERALIST")#将返回相匹配的数据
+asv_r16s<- read.csv("21_fertilization_16s+its/R16s_asv.csv",row.names=1)
+asv3 <- merge(asv_r16s, asv2, by= 0 )#根据行名ASV合并2个数据框
+asv3 <- asv3[,1:41]
+
+asv4 <- filter(.data=asv1,sign=="SPECIALIST")
+asv5 <- merge(asv_r16s, asv4, by= 0 )
+asv5 <- asv5[,1:41]
+
+write.csv(asv3,"input/asv_16s_generalist.csv",row.names=F)
+write.csv(asv5,"input/asv_16s_specialist.csv",row.names=F)
+#真菌
+asv_rits<- read.csv("21_fertilization_16s+its/Rits_asv.csv",row.names=1)
+asv_rits <-t (asv_rits)
+df<- spec.gen(asv_rits,niche.width.method="occurrence",perm.method="quasiswap",n=1000,probs=c(0.025,0.975))
+No_generalist <- length(grep('GENERALIST',df$sign))
+No_neutral <- length(grep('NON',df$sign))
+No_specialist <- length(grep('SPECIALIST',df$sign))
+write.csv(df,"input/asv_its_TehuaFanhua.csv")
+
+asv1<-read.csv("input/asv_its_TehuaFanhua.csv",row.names = 1)
+#asv <- filter(.data=asv1,sign!="NON SIGNIFICANT")#返回sign不是"NON SIGNIFICANT"的数据
+asv2 <- filter(.data=asv1,sign=="GENERALIST")#将返回相匹配的数据
+asv_rits<- read.csv("21_fertilization_16s+its/Rits_asv.csv",row.names=1)
+asv3 <- merge(asv_rits, asv2, by= 0 )#根据行名ASV合并2个数据框
+asv3 <- asv3[,1:41]
+
+asv4 <- filter(.data=asv1,sign=="SPECIALIST")
+asv5 <- merge(asv_rits, asv4, by= 0 )
+asv5 <- asv5[,1:41]
+View(asv4)
+write.csv(asv3,"input/asv_its_generalist.csv",row.names=F)
+write.csv(asv5,"input/asv_its_specialist.csv",row.names=F)
 
