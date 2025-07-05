@@ -1,0 +1,207 @@
+
+library(ggtree)
+library(data.table)
+library(WGCNA)
+library(igraph)
+
+bac_tree <- read.tree("rooted_tree_final_bac.nwk")
+cor_bac <- fread("cor_sparcc_bac.txt",sep = "\t",header = T)
+pval_bac <- fread("pvals_bac.two_sided.txt",sep = "\t",header = T)
+# class(cor_bac)
+cor_bac <- as.data.frame(cor_bac)
+pval_bac <- as.data.frame(pval_bac)
+
+g1 = graph_from_adjacency_matrix(cor_bac3,mode = "undirected",weighted = TRUE,diag = FALSE)
+g1 <- igraph::delete.vertices(g1, names(igraph::degree(g1)[igraph::degree(g1) == 0]))##删除孤立节点
+aa <- as.data.frame(names(V(g1)))
+rownames(aa) <- aa$`names(V(g1))`
+
+########################节点赋值#########################
+##分类信息导入
+df_bac <- read.csv("res.stats_bac.csv",header = T,row.names = 1)
+tax_bac <- read.csv("Tax_bac_final.csv",header = T,row.names = 1)
+# class(df_bac)
+# class(tax_bac)
+###分类表筛选构建节点属性表
+df_bac_filter <- df_bac[rownames(df_bac)%in%V(g1)$name,]
+tax_bac_filter <- tax_bac[rownames(tax_bac)%in%V(g1)$name,]
+
+#为节点加上分类信息
+V(g1)$Type <- as.character(df_bac_filter$Sign)##特化种和泛化种属性
+V(g1)$Kingdom = as.character(tax_bac_filter$Kingdom)                            #界
+V(g1)$Phylum = as.character(tax_bac_filter$Phylum)                              #门
+V(g1)$Class = as.character(tax_bac_filter$Class)                                #纲
+V(g1)$Order = as.character(tax_bac_filter$Order)                                #目
+V(g1)$Family = as.character( tax_bac_filter$Family)                             #科
+V(g1)$Genus = as.character(tax_bac_filter$Genus)                                #属
+class(g1)
+#将相关系数复制一列并取其绝对值为权重
+E(g1)$corr <- E(g1)$weight
+E(g1)$weight <- abs(E(g1)$weight)
+##节点度
+node_degree <- igraph::degree(g1)
+V(g1)$degree <- node_degree
+# V(g1)[V(g1)$Type == "Generalist"]
+# sum(V(g1)[V(g1)$Type == "Generalist"] == "ASV_1907")
+#平均度
+average_degree = mean(igraph::degree(g1))         
+average_degree
+# V(g1)$degree>298.309###平均节点度
+# summary(V(g1)$degree)
+# h_degree_bac <- V(g1)$name[V(g1)$degree>308.0]
+
+#计算网络的modularity
+modu_network = cluster_fast_greedy(g1,weights =NULL) # groups: 5
+modularity = modularity(g1,membership(modu_network)) # mod:0.64 （该数值越小，模块分组愈多）
+# 提取modu_network中每个节点对应的模块情况
+modu = membership(modu_network) 
+V(g1)$group <- modu
+V(g1)
+# 计算接近中心性
+V(g1)$closeness_centrality <- igraph::closeness.estimate(g1)
+closeness_centrality=V(g1)$closeness_centrality
+# 计算介数中心性
+V(g1)$betweenness_centrality <- igraph::betweenness(g1)
+betweenness_centrality=V(g1)$betweenness_centrality
+# 计算特征向量中心性
+V(g1)$eigenvector_centrality <- igraph::evcent(g1)$vector
+eigenvector_centrality=V(g1)$eigenvector_centrality
+E(g1)$weight
+E(g1)$corr_type <- rep("a",length(E(g1)))
+E(g1)$corr_type[E(g1)$weight > 0] <- "Positive"
+E(g1)$corr_type[E(g1)$weight < 0] <- "Negative"
+sum(E(g1)$weight < 0)
+
+#读取网络邻接矩阵(非0-1矩阵)
+# cor_bac <- fread("cor_sparcc_bac.txt",sep = "\t",header = T)
+# class(cor_bac)
+# cor_bac <- as.data.frame(cor_bac)
+# rownames(cor_bac) <- cor_bac$V1
+# cor_bac <- cor_bac[-1]
+# head(colnames(cor_bac))
+cor_bac3 <- as.data.frame(cor_bac3)
+b <- read.csv("cor_bac.csv",header = T,row.names = 1)
+b1 <-cor_bac3[,colnames(cor_bac3)%in%rownames(aa)]
+b2 <-b1[rownames(b1)%in%rownames(aa),]
+
+asv_bac_G <- read.csv("asv_filter_bac_G.csv",header = T,row.names = 1)
+asv_bac_S <- read.csv("asv_filter_bac_S.csv",header = T,row.names = 1)
+asv_bac <- read.table("asv_bac.txt",header = T,row.names = 1)
+asv_bacc <- asv_bac[rownames(asv_bac)%in%rownames(aa),]
+asv_bac_rel <- as.data.frame(t(t(asv_bacc)/colSums(asv_bacc)))
+# asv_bac1 <- asv_bac_rel[rownames(asv_bac_rel)%in%rownames(aa),]
+asv_bac1 <- asv_bac_rel[,!colSums(asv_bac_rel,na.rm = TRUE) == 0]
+colSums(asv_bac1)
+######移除特化种与泛化种的节点
+rbg <- b2[!rownames(b2)%in%rownames(asv_bac_G),]
+rbg1 <- rbg[,!colnames(rbg)%in%rownames(asv_bac_G)]
+rbg1 <- rbg1[,!colSums(rbg1) == 0]
+rbg1 <- rbg1[!rowSums(rbg1) == 0,]
+rbs <- b2[!rownames(b2)%in%rownames(asv_bac_S),]
+rbs1 <- rbs[,!colnames(rbs)%in%rownames(asv_bac_S)]
+rbs1 <- rbs1[,!colSums(rbs1) == 0]
+rbs1 <- rbs1[!rowSums(rbs1) == 0,]
+r_bacg <- asv_bac1[rownames(asv_bac1)%in%rownames(rbg1),]
+r_bacg <- r_bacg[,!colSums(r_bacg) == 0]
+r_bacs <- asv_bac1[rownames(asv_bac1)%in%rownames(rbs1),]
+r_bacs <- r_bacs[,!colSums(r_bacs) == 0]
+
+match(rownames(rbg1),rownames(r_bacg))
+
+#计算各物种的正、负连通性
+r_pos <- c()
+r_neg <- c()
+spe_i <- c()
+for (i in names(rbs1)) {  
+  co <- na.omit(rbs1[[i]])  
+  r_pos <- c(r_pos, mean(co[co>0]))  
+  r_neg <- c(r_neg, mean(co[co<0]))  
+  spe_i <- c(spe_i, i)}
+r1 <- data.frame(spe_i, r_pos, r_neg)
+r1
+sum(is.na(r1$r_pos))
+
+
+# 将NaN值赋值为0
+r1$r_pos[is.nan(r1$r_pos)] <- 0
+r1$r_neg[is.nan(r1$r_neg)] <- 0
+#计算各样本的正、负凝聚力
+C_pos <- c()
+C_neg <- c()
+sample <- c()
+for (j in names(r_bacs)) {  
+  C_pos <- c(C_pos, sum(r_bacs[[j]]*r1$r_pos))  
+  C_neg <- c(C_neg, sum(r_bacs[[j]]*r1$r_neg))  
+  sample <- c(sample, j)}
+C1 <- data.frame(sample, C_pos, C_neg)
+C1
+sum(C1$C_pos == 0)
+
+library(ggtree)
+library(picante)
+library(ggnewscale)
+library(ggtreeExtra)
+library(ggplot2)
+library(RColorBrewer)
+library(ggstar)
+display.brewer.all(type = "seq")
+core_tree_bac <- read.tree("core_tree_bac.nwk")
+core_list_bac <- read.csv("core_list_bac.csv",header = T,row.names = 1)
+core_list_clon_bac <- read.csv("core_list_bac_clo.csv",header = T,row.names = 1)
+core_asv_bac <- read.csv("core_asv_bac.csv",header = T,row.names = 1)
+core_list_bac <- merge(core_list_bac,core_filter_bac_clo,by = "label")
+core_list_bac$closeness_centrality <- log(core_list_bac$closeness_centrality)*(-1)
+asv_filter_bac <- read.csv("asv_filter_bac.csv",header = T,row.names = 1)
+tree_bac <- ggtree(core_tree_bac, layout = "radial", branch.length = "none", size = 0.5)
+tree_bac
+tree1<- tree_bac+geom_fruit(
+  data=core_list_bac,
+  geom=geom_star,
+  mapping=aes(y=label,fill=type.x),
+  position="identity",
+  starstroke=0.5
+)
+# tree1 <- tree_bac+geom_strip("ASV_788", "ASV_1282", offset = 5,
+#              barsize = 13, extend = 0.6,
+#              color = "lightblue") +
+#   geom_strip("ASV_26","ASV_26",  offset = 5,
+#              barsize = 13, extend = 0.6,
+#              color = "pink")+
+#   geom_strip("ASV_334", "ASV_366", offset = 5,
+#              barsize = 13, extend = 0.6,
+#              color = "lightblue")+
+#     geom_strip("ASV_176", "ASV_715",  offset = 5,
+#                barsize = 13, extend = 0.6,
+#                color = "lightblue")
+tree1
+col <- brewer.pal(12,"Set3")
+tree2 <- tree1+geom_fruit(
+  data = core_list_bac,mapping = aes(y = label,x = type.x,fill = type.x,alpha = closeness_centrality),
+  geom = geom_tile,
+  color = "white",
+  pwidth = 0.25,
+  offset = 0.1,
+  size = 0.5)
+tree2
+tree3 <-tree2+geom_tiplab(color = "black", hjust = -1, size = 2, offset = 6)
+tree3
+tree4 <- tree3+ggnewscale::new_scale_fill() +
+  geom_fruit(
+    data=core_list_bac,
+    geom=geom_col,
+    mapping=aes(y=label, x=node_degree, fill=phylum), 
+    pwidth=0.8,offset = 0.8,
+    axis.params=list(
+      axis="x", # 添加x轴文字
+      text.size=2, #文字大小
+      text.angle=-45, # 角度
+      hjust=0  # 调节
+    ),
+    grid.params=list() # 添加网格线
+  ) + 
+  scale_fill_manual(
+    values=col,
+    guide=guide_legend(keywidth=0.5, keyheight=0.5, order=6)
+  )
+tree4
+ggsave("tree_bac.pdf",height = 10,width = 12)
