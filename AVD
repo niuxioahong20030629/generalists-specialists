@@ -1,0 +1,53 @@
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(tidyr)
+#读取 OTU 丰度表
+otu_bacg <- read.csv('asv_filter_bac_G.csv', row.names = 1,header = T)
+
+#计算各 OTU 的变异度
+ai_bac_G <- abs(otu_bacg-apply(otu_bacg, 1, mean))/apply(otu_bacg, 1, sd)
+ai_bac_G <- na.omit(ai_bac_G)
+
+#由于此时计算的是单个样本的 AVD，即 k=1
+avd_bac_G <- as.data.frame(colSums(ai_bac_G)/(1*nrow(otu_bacg)))
+avd_bac_G$sample <- rownames(avd_bac_G)
+
+#读取分组，合并数据并简单可视化
+group <- read.delim('21-23_group.txt', sep = '\t', stringsAsFactors = FALSE, check.names = FALSE)
+AVD_bac_G <- merge(group,avd_bac_G,by = "sample")
+AVD_bac_G$type <- rep("generalist",nrow(AVD_bac_G))
+##显著性检验
+library(multcompView)
+library(tidyverse)
+anovaG <- aov(AVDG ~ time,data = AVD_bac)
+summary(anovaG)
+# Tukey多重配对比较
+tukeyG <- TukeyHSD(anovaG)
+# 创建字母
+cldG1 <- multcompView::multcompLetters4(anovaG,tukeyG)
+cldG2 <- as.data.frame.list(cldG1$time) %>% select(1) %>% 
+  rownames_to_column("time") 
+dtG <- AVD_bac %>% group_by(time) %>% 
+  summarise(w=mean(AVDG), sd = sd(AVDG),max = max(AVDG)) %>%
+  arrange(desc(w)) %>% 
+  left_join(.,cldG2)
+##ggplot绘图
+
+p1 <- ggplot(data = AVD_bac,aes(time,AVDG, fill = time))+
+  stat_boxplot(geom="errorbar",position = position_dodge(0.5),width=0.1)+
+  geom_boxplot(position = position_dodge(0.5),width=0.25)+
+  geom_jitter(aes(colour=time),alpha = 0.5,size = 1)+
+  scale_fill_manual(values = c("#E64B35FF", "#4DBBD5FF", "#00A087FF",
+                               "#F39B7FFF","#E64B35FF", "#4DBBD5FF", 
+                               "#00A087FF","#E64B35FF", "#4DBBD5FF", "#00A087FF" ))+#定义填充颜色  
+  scale_colour_manual(values = c("#E64B35FF", "#4DBBD5FF", "#00A087FF",
+                               "#F39B7FFF","#E64B35FF", "#4DBBD5FF", 
+                               "#00A087FF","#E64B35FF", "#4DBBD5FF", "#00A087FF" ))+#定义填充颜色  
+  labs(x = "", y = "AVDG")+
+  theme_bw()+
+  theme(axis.title.x = element_blank(),
+        legend.position = "none")+
+  geom_text(data = dtG, aes(x = time, y = max + 1*sd, label = Letters))
+p1
+ggsave("bac_g_time.pdf",width = 8,height = 6)
